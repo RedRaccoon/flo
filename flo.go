@@ -17,7 +17,17 @@ import (
 )
 
 var (
-	mutex = &sync.Mutex{}
+	//mutex for creating *.ts files
+	mutex            = &sync.Mutex{}
+	nbrGoRoutine     = 0
+	nbrGoRoutineDone = 0
+	fileName         = "1"
+)
+
+const (
+	//max size of a ts file name
+	tsFileMaxSize = 20
+	nameTempFile  = "_tempTsFiles"
 )
 
 func main() {
@@ -27,17 +37,19 @@ func main() {
 		panic(err)
 	}
 
-	err = os.RemoveAll("_tempTsFiles")
+	err = os.RemoveAll(nameTempFile)
 	if err != nil {
-		//check if the folder is really deleted
+		//check if the folder is deleted to be shure having an empty directory
+
 	}
 
-	os.Mkdir("_tempTsFiles", 1)
+	//create the directory for the *.ts files, 1 = full right
+	os.Mkdir(nameTempFile, 1)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	destination := filepath.Dir(ex) + "\\_tempTsFiles\\"
+	destination := filepath.Dir(ex) + "\\" + nameTempFile + "\\"
 
 	if len(os.Args) < 2 {
 		log.Fatal("need the url of the playlist")
@@ -45,13 +57,11 @@ func main() {
 
 	var url = os.Args[1]
 
-	//var toDl="chunklist_w135572285_b3300956.m3u8"
 	var toDl = getChunkList(url)
+
+	//channel for the files to download
 	done := make(chan bool)
 	pDone := &done
-	var nbrGoRoutine = 0
-	var nbrGoRoutineDone = 0
-	var fileName = "1"
 
 	startTime := time.Now()
 
@@ -68,22 +78,16 @@ func main() {
 		fmt.Println(line)
 
 		if strings.HasSuffix(line, ".ts") {
-
-			fmt.Println("on telecharge   " + url + line)
 			go downloadFile(destination, fileName+".ts", pDone, url+line)
 			fileName = binaryorder(fileName)
 			nbrGoRoutine++
-		}
-		if line == "#EXT-X-ENDLIST" {
-			//trigger
-			fmt.Println("trouvé")
 		}
 	}
 	if err := s.Err(); err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("il y a " + strconv.Itoa(nbrGoRoutine) + " en cours")
+	fmt.Println("There is " + strconv.Itoa(nbrGoRoutine) + " goroutines downloading")
 	for i := 0; i < nbrGoRoutine; i++ {
 		<-done
 		nbrGoRoutineDone = debug(nbrGoRoutineDone)
@@ -95,6 +99,8 @@ func main() {
 	fmt.Println(elapsed)
 
 	c := exec.Command("cmd", "/C copy /b _tempTsFiles\\*.ts final.ts")
+
+	//out & stdeer help give an error more usefull for debuging
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	c.Stdout = &out
@@ -104,7 +110,7 @@ func main() {
 		fmt.Println("Error: ", err)
 		fmt.Println(fmt.Sprint(err) + ": " + stderr.String())
 	}
-	fmt.Println("Result: " + out.String())
+	fmt.Println("File available !  " + out.String())
 
 }
 
@@ -138,7 +144,6 @@ func writeOnDisk(out *os.File, respBody io.ReadCloser, err error, done *chan boo
 	if err != nil {
 		fmt.Println("error write the body file => ", err)
 
-		//return err
 	}
 	out.Close()
 	respBody.Close()
@@ -146,10 +151,11 @@ func writeOnDisk(out *os.File, respBody io.ReadCloser, err error, done *chan boo
 
 }
 
+//by default windows make a binary order with the files
+//the order of 1 - 2 - 11 - 21 is 1 - 11 - 2 - 21
 func binaryorder(s string) string {
 
-	//taille max des nom du fichier => len(s)> x
-	if len(s) > 20 {
+	if len(s) > tsFileMaxSize {
 		sInt := s[0:1]
 
 		var newInt, _ = strconv.Atoi(sInt)
@@ -162,10 +168,15 @@ func binaryorder(s string) string {
 
 }
 
+//get the const for flo_test
+func getTsFileMaxSize() int {
+	return tsFileMaxSize
+}
+
 func debug(i int) int {
 
 	i++
-	fmt.Println("routine terminé " + strconv.Itoa(i))
+	fmt.Println("routine finished " + strconv.Itoa(i))
 	return (i)
 
 }
@@ -185,6 +196,7 @@ func getChunkList(url string) string {
 		if nextIsChunkList {
 			return (line)
 		}
+		//we obviously choose the best resolution ...
 		if strings.HasSuffix(line, "RESOLUTION=1280x720") {
 			nextIsChunkList = true
 
