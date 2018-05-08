@@ -48,7 +48,3 @@ it will create a tmp files and stock all ts files inside it
 you can check all the routine beeing launched
 
 once it's done you will have a "final.ts" file with your video
-
-rename or move it if you want to get other videos
-
-![Alt text](ressources/readme/final.jpg?raw=true "Title")
